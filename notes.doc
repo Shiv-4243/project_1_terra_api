@@ -1,0 +1,83 @@
+1.passing user data as file: 
+    user_data_installing_jenkins = file("./jenkins-runner/jenkins-installer.sh")
+    user_data_installing_jenkins = templatefile("./jenkins-runner/jenkins-installer.sh", {variables_passed})
+
+2. passing KEY PAIR in main.tf file
+    only mention file name without any Extention like .pem or .pub 
+    No need to mention path in main.tf file in terrform.
+    To ssh in to instace you need the path to file
+
+3. Output the public IP of the instance
+        output "instance_public_ip" {
+        description = "The public IP address of the EC2 instance"
+        value       = aws_instance.my_instance.public_ip
+        }
+
+4. PROPER WAY TO USE OUTPUT.TF FILE.
+   Ensure the module sg outputs the correct resource.In your sg module (probably inside the sg directory),
+   you need to make sure that the security group is declared and then outputted.
+
+    resource "aws_security_group" "jenkins_sg" {
+    name        = "jenkins_sg"
+    description = "Jenkins security group"
+    vpc_id      = var.vpc_id
+    # other configurations as required
+    }
+
+    output "jenkins_sg" {
+    value = aws_security_group.jenkins_sg
+    }
+
+    YOU NEED TO REFERENCE OUTPUT NAME IN OUTPUTS.TF FILE.(EX: jenkins_sg )
+
+5. 1. Check the User Data Script Logs
+        The most critical piece of information comes from the logs. 
+        The user data script may have errors that prevent Jenkins from being installed. 
+
+        To access detailed logs on the instance:
+        Cloud-init Logs:
+            sudo cat /var/log/cloud-init.log
+            sudo cat /var/log/cloud-init-output.log 
+        These logs will tell you if the user data script was executed and where it failed.
+
+6. To remote Execute and get output in to server.
+   USE provisioner:
+
+        provisioner "remote-exec" {
+        inline = [
+        "sleep 20",  # Wait for Jenkins to initialize
+        "echo 'Jenkins Admin Password:'",
+        "cat /var/lib/jenkins/secrets/initialAdminPassword"
+        ]
+
+        connection {
+        type        = "ssh"
+        user        = "ubuntu"  # Change based on your AMI
+        private_key = file("~/.ssh/your-key.pem")  # Replace with your private key
+        host        = self.public_ip
+        }
+    }
+
+7. Remote exec runs before useddat is completed so we can use "NULL RESOURCE",WITH [depends_on] function.
+
+    resource "null_resource" "after_jenkins_setup" {
+    depends_on = [aws_instance.jenkins] # Ensure the instance is fully created before executing this
+
+    provisioner "remote-exec" {
+        inline = [
+        "sleep 120",
+        "echo 'Jenkins Admin Password:'",
+        "sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+        ]
+
+        connection {
+        type        = "ssh"
+        user        = "ubuntu" # Change based on your AMI
+        private_key = file("/Users/shiv_sush/projects/project_1_terra_api/jenkins/mumbaikey.pem")
+        host        = aws_instance.jenkins.public_ip
+        }
+    }
+}
+
+8. 
+
